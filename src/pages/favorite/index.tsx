@@ -23,10 +23,6 @@ const FavoritePage: React.FC = () => {
   } = useAppStore();
   const [activeTab, setActiveTab] = useState<TabType>('favorites');
   const [showSouvenir, setShowSouvenir] = useState(false);
-  const [souvenirShareData, setSouvenirShareData] = useState<{
-    title: string;
-    desc: string;
-  } | null>(null);
 
   const totalStamps = stamps.filter(s => s.earned).length;
   const today = dayjs().format('YYYY年M月D日');
@@ -39,24 +35,37 @@ const FavoritePage: React.FC = () => {
     stampsCount: totalStamps
   });
 
-  useShareAppMessage(() => {
-    if (souvenirShareData) {
-      return {
-        title: souvenirShareData.title,
-        desc: souvenirShareData.desc,
-        path: '/pages/home/index'
-      };
-    }
+  React.useEffect(() => {
+    Taro.showShareMenu({
+      withShareTicket: true,
+      menus: ['shareAppMessage', 'shareTimeline']
+    });
+  }, []);
+
+  const getShareContent = () => {
+    const todayStr = dayjs().format('M月D日');
+    const shareTitle = `${todayStr} · 我的博物馆参观纪念卡`;
+    const shareDesc = `我聆听了${listenedAudios.length}件讲解，收藏了${favorites.length}件展品，获得${totalStamps}枚印章！${souvenirMessage}`;
+    
     return {
-      title: '🏛️ 博物馆自助导览',
-      desc: '探索历史，感受文化魅力',
+      title: shareTitle,
+      desc: shareDesc
+    };
+  };
+
+  useShareAppMessage(() => {
+    const content = getShareContent();
+    return {
+      title: content.title,
+      desc: content.desc,
       path: '/pages/home/index'
     };
   });
 
   useShareTimeline(() => {
+    const content = getShareContent();
     return {
-      title: '🏛️ 博物馆自助导览',
+      title: content.title,
       query: ''
     };
   });
@@ -93,32 +102,9 @@ const FavoritePage: React.FC = () => {
 
   const handleShare = () => {
     console.log('[FavoritePage] 分享纪念卡');
-    const shareTitle = `我的博物馆参观纪念卡`;
-    const shareDesc = `我在博物馆聆听了${listenedAudios.length}件展品讲解，收藏了${favorites.length}件展品，获得了${totalStamps}枚印章！${souvenirMessage}`;
-    
-    setSouvenirShareData({
-      title: shareTitle,
-      desc: shareDesc
-    });
-
     Taro.showShareMenu({
       withShareTicket: true,
-      menus: ['shareAppMessage', 'shareTimeline'],
-      success: () => {
-        console.log('[FavoritePage] 分享菜单已显示');
-        Taro.showToast({ 
-          title: '点击右上角分享', 
-          icon: 'none',
-          duration: 2000
-        });
-      },
-      fail: (err) => {
-        console.error('[FavoritePage] 分享菜单显示失败:', err);
-        Taro.showToast({ 
-          title: '分享失败，请重试', 
-          icon: 'error'
-        });
-      }
+      menus: ['shareAppMessage', 'shareTimeline']
     });
   };
 
@@ -317,9 +303,9 @@ const FavoritePage: React.FC = () => {
               </Button>
               <Button
                 className={`${styles.souvenirActionBtn} ${styles.souvenirShareBtn}`}
-                onClick={handleShare}
+                open-type="share"
               >
-                分享给同伴
+                📤 分享给同伴
               </Button>
             </View>
           </View>

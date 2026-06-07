@@ -8,14 +8,17 @@ import { useAppStore } from '@/store/useAppStore';
 interface QuizCardProps {
   quiz: Quiz;
   showResult?: boolean;
-  onAnswer?: (isCorrect: boolean) => void;
+  onAnswer?: (isCorrect: boolean, isFirstTime: boolean) => void;
   onNext?: () => void;
 }
 
 const QuizCard: React.FC<QuizCardProps> = ({ quiz, showResult = false, onAnswer, onNext }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isAnswered, setIsAnswered] = useState(showResult);
-  const completeQuiz = useAppStore(state => state.completeQuiz);
+  const [localCorrect, setLocalCorrect] = useState<boolean | null>(null);
+  const { completeQuiz, completedQuizzes } = useAppStore();
+
+  const isAlreadyCompleted = completedQuizzes.includes(quiz.id);
 
   const handleOptionClick = (index: number) => {
     if (isAnswered) return;
@@ -27,12 +30,18 @@ const QuizCard: React.FC<QuizCardProps> = ({ quiz, showResult = false, onAnswer,
     
     const isCorrect = selectedIndex === quiz.correctIndex;
     setIsAnswered(true);
-    completeQuiz(quiz.id);
+    setLocalCorrect(isCorrect);
+    
+    if (!isAlreadyCompleted) {
+      completeQuiz(quiz.id, isCorrect);
+    } else {
+      console.log('[QuizCard] 题目已答过，不计入累计:', quiz.id);
+    }
     
     if (onAnswer) {
-      onAnswer(isCorrect);
+      onAnswer(isCorrect, !isAlreadyCompleted);
     }
-    console.log('[QuizCard] 提交答案:', quiz.id, '正确:', isCorrect);
+    console.log('[QuizCard] 提交答案:', quiz.id, '正确:', isCorrect, '是否首次:', !isAlreadyCompleted);
   };
 
   const handleNext = () => {

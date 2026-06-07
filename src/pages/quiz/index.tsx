@@ -41,15 +41,16 @@ const QuizPage: React.FC = () => {
     setShowResult(false);
   };
 
-  const handleAnswer = (isCorrect: boolean) => {
+  const handleAnswer = (isCorrect: boolean, isFirstTime: boolean) => {
     const currentQuiz = chapterQuizzes[currentQuizIndex];
-    console.log('[QuizPage] 答题结果:', isCorrect, '题目:', currentQuiz?.id);
+    console.log('[QuizPage] 答题结果:', isCorrect, '题目:', currentQuiz?.id, '首次:', isFirstTime);
     
-    if (!completedQuizzes.includes(currentQuiz.id)) {
-      completeQuiz(currentQuiz.id, isCorrect);
-      if (isCorrect) {
-        setChapterCorrectCount(prev => prev + 1);
-      }
+    if (isCorrect) {
+      setChapterCorrectCount(prev => prev + 1);
+    }
+    
+    if (!isFirstTime) {
+      console.log('[QuizPage] 非首次答题，不计入累计统计');
     }
   };
 
@@ -59,11 +60,19 @@ const QuizPage: React.FC = () => {
     } else {
       setShowResult(true);
       if (selectedChapter) {
-        const stampId = `s${chapters.findIndex(c => c.id === selectedChapter.id) + 1}`;
-        const existingStamp = stamps.find(s => s.id === stampId);
-        if (existingStamp && !existingStamp.earned) {
-          earnStamp(stampId);
-          Taro.showToast({ title: `获得「${existingStamp.name}」印章！🎉`, icon: 'none' });
+        const chapterIndex = chapters.findIndex(c => c.id === selectedChapter.id);
+        if (chapterIndex >= 0) {
+          const stampId = `s${chapterIndex + 1}`;
+          const existingStamp = stamps.find(s => s.id === stampId);
+          
+          const isChapterAlreadyCompleted = isChapterCompleted(selectedChapter);
+          
+          if (existingStamp && !existingStamp.earned && isChapterAlreadyCompleted) {
+            earnStamp(stampId);
+            Taro.showToast({ title: `获得「${existingStamp.name}」印章！🎉`, icon: 'none' });
+          } else if (existingStamp && existingStamp.earned) {
+            console.log('[QuizPage] 印章已获得，不重复发放:', existingStamp.name);
+          }
         }
       }
     }

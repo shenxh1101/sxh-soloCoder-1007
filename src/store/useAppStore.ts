@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import Taro from '@tarojs/taro';
 import type { AppState, Stamp, FavoriteItem, ListenedAudio, UnfinishedRoute } from '@/types';
 
 const STORAGE_KEY = 'museum_app_state';
@@ -23,11 +24,10 @@ interface PersistedState {
 
 const loadPersistedState = (): Partial<PersistedState> => {
   try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        return JSON.parse(saved);
-      }
+    const saved = Taro.getStorageSync(STORAGE_KEY);
+    if (saved) {
+      console.log('[Store] 从微信缓存加载数据成功');
+      return JSON.parse(saved);
     }
   } catch (e) {
     console.warn('[Store] 加载持久化数据失败:', e);
@@ -37,12 +37,10 @@ const loadPersistedState = (): Partial<PersistedState> => {
 
 const savePersistedState = (state: Partial<PersistedState>) => {
   try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const current = loadPersistedState();
-      const toSave = { ...current, ...state };
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-      console.log('[Store] 状态已持久化');
-    }
+    const current = loadPersistedState();
+    const toSave = { ...current, ...state };
+    Taro.setStorageSync(STORAGE_KEY, JSON.stringify(toSave));
+    console.log('[Store] 状态已持久化到微信缓存');
   } catch (e) {
     console.warn('[Store] 保存持久化数据失败:', e);
   }
