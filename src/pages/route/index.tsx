@@ -48,18 +48,55 @@ const RoutePage: React.FC = () => {
 
   const handleExhibitClick = (exhibitId: string, index: number) => {
     console.log('[RoutePage] 点击展品:', exhibitId);
-    setCurrentIndex(index);
-    saveUnfinishedRoute(selectedRoute!.id, index);
+    if (index > currentIndex) {
+      Taro.showToast({ title: '请按顺序参观', icon: 'none' });
+      return;
+    }
     Taro.navigateTo({
       url: `/pages/exhibit-detail/index?id=${exhibitId}`
     });
   };
 
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      const newIndex = currentIndex - 1;
+      setCurrentIndex(newIndex);
+      saveUnfinishedRoute(selectedRoute!.id, newIndex);
+      console.log('[RoutePage] 上一件:', newIndex);
+    }
+  };
+
+  const handleNext = () => {
+    const exhibitIds = selectedRoute!.exhibitIds.slice(0, selectedRoute!.exhibitCount);
+    if (currentIndex < exhibitIds.length - 1) {
+      const newIndex = currentIndex + 1;
+      setCurrentIndex(newIndex);
+      saveUnfinishedRoute(selectedRoute!.id, newIndex);
+      console.log('[RoutePage] 下一件:', newIndex);
+      Taro.showToast({ title: '已标记为完成', icon: 'success' });
+    }
+  };
+
   const handleCompleteRoute = () => {
     if (selectedRoute) {
-      removeUnfinishedRoute(selectedRoute.id);
-      setSelectedRoute(null);
-      Taro.showToast({ title: '路线已完成！🎉', icon: 'success' });
+      Taro.showModal({
+        title: '完成路线',
+        content: '确定要完成这条参观路线吗？',
+        success: (res) => {
+          if (res.confirm) {
+            removeUnfinishedRoute(selectedRoute!.id);
+            setSelectedRoute(null);
+            Taro.showToast({ title: '路线已完成！🎉', icon: 'success' });
+          }
+        }
+      });
+    }
+  };
+
+  const handleMarkCurrentComplete = () => {
+    const exhibitIds = selectedRoute!.exhibitIds.slice(0, selectedRoute!.exhibitCount);
+    if (currentIndex < exhibitIds.length - 1) {
+      handleNext();
     }
   };
 
@@ -69,7 +106,10 @@ const RoutePage: React.FC = () => {
 
   if (selectedRoute) {
     const exhibitIds = selectedRoute.exhibitIds.slice(0, selectedRoute.exhibitCount);
-    const progress = Math.round((currentIndex / exhibitIds.length) * 100);
+    const totalCount = exhibitIds.length;
+    const progress = Math.min(100, Math.round(((currentIndex + 1) / totalCount) * 100));
+    const isLastItem = currentIndex >= totalCount - 1;
+    const currentExhibit = getExhibitById(exhibitIds[currentIndex]);
 
     return (
       <ScrollView className={styles.page} scrollY>
@@ -93,6 +133,30 @@ const RoutePage: React.FC = () => {
           ← 返回路线列表
         </Button>
 
+        {/* Current Exhibit Card */}
+        {currentExhibit && (
+          <View className={styles.currentExhibitCard}>
+            <View className={styles.currentExhibitHeader}>
+              <Text className={styles.currentExhibitLabel}>当前展品</Text>
+              <Text className={styles.currentExhibitNumber}>
+                {currentIndex + 1} / {totalCount}
+              </Text>
+            </View>
+            <Text className={styles.currentExhibitName}>{currentExhibit.name}</Text>
+            <Text className={styles.currentExhibitMeta}>
+              {currentExhibit.era} · {currentExhibit.category}
+            </Text>
+            <Button
+              className={styles.viewDetailBtn}
+              onClick={() => handleExhibitClick(currentExhibit.id, currentIndex)}
+            >
+              查看展品详情
+            </Button>
+          </View>
+        )}
+
+        <Text className={styles.sectionTitle}>参观进度</Text>
+
         <View className={styles.timeline}>
           <View className={styles.timelineList}>
             {exhibitIds.map((exhibitId, index) => {
@@ -105,7 +169,10 @@ const RoutePage: React.FC = () => {
               return (
                 <View 
                   key={exhibitId} 
-                  className={styles.timelineItem}
+                  className={classnames(
+                    styles.timelineItem,
+                    isCurrent && styles.timelineItemCurrent
+                  )}
                   onClick={() => handleExhibitClick(exhibitId, index)}
                 >
                   <View className={classnames(
@@ -121,7 +188,7 @@ const RoutePage: React.FC = () => {
                   )}>
                     <Text className={styles.timelineExhibitName}>
                       {exhibit.name}
-                      {isCurrent && ' 👈'}
+                      {isCurrent && ' 👈 当前'}
                     </Text>
                     <Text className={styles.timelineExhibitMeta}>
                       {exhibit.category} · {exhibit.location} · {exhibit.audioDuration}
@@ -131,12 +198,28 @@ const RoutePage: React.FC = () => {
               );
             })}
           </View>
+        </View>
 
-          {currentIndex >= exhibitIds.length && (
+        {/* Navigation Buttons */}
+        <View className={styles.navButtons}>
+          <Button
+            className={classnames(styles.navBtn, styles.navBtnSecondary)}
+            onClick={handlePrev}
+            disabled={currentIndex === 0}
+          >
+            ← 上一件
+          </Button>
+          {!isLastItem ? (
             <Button
-              className={styles.continueBtn}
+              className={classnames(styles.navBtn, styles.navBtnPrimary)}
+              onClick={handleNext}
+            >
+              下一件 →
+            </Button>
+          ) : (
+            <Button
+              className={classnames(styles.navBtn, styles.navBtnPrimary)}
               onClick={handleCompleteRoute}
-              style={{ width: '100%', marginTop: '32rpx' }}
             >
               🎉 完成路线
             </Button>

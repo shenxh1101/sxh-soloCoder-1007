@@ -12,17 +12,24 @@ import type { Chapter, Quiz } from '@/types';
 type TabType = 'quiz' | 'stamp';
 
 const QuizPage: React.FC = () => {
-  const { completedQuizzes, stamps, earnStamp } = useAppStore();
+  const { completedQuizzes, stamps, earnStamp, completeQuiz, totalCorrectCount } = useAppStore();
   const [activeTab, setActiveTab] = useState<TabType>('quiz');
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
   const [chapterQuizzes, setChapterQuizzes] = useState<Quiz[]>([]);
-  const [correctCount, setCorrectCount] = useState(0);
+  const [chapterCorrectCount, setChapterCorrectCount] = useState(0);
   const [showResult, setShowResult] = useState(false);
 
   const totalAnswered = completedQuizzes.length;
   const totalStamps = stamps.filter(s => s.earned).length;
-  const accuracy = totalAnswered > 0 ? Math.round((correctCount / (currentQuizIndex + 1)) * 100) : 0;
+  const accuracy = totalAnswered > 0 
+    ? Math.min(100, Math.round((totalCorrectCount / totalAnswered) * 100)) 
+    : 0;
+
+  const isChapterCompleted = (chapter: Chapter): boolean => {
+    const quizzes = getQuizzesByChapter(chapter.title);
+    return quizzes.every(q => completedQuizzes.includes(q.id));
+  };
 
   const handleStartChapter = (chapter: Chapter) => {
     console.log('[QuizPage] 开始章节:', chapter.id);
@@ -30,14 +37,19 @@ const QuizPage: React.FC = () => {
     setSelectedChapter(chapter);
     setChapterQuizzes(quizzes);
     setCurrentQuizIndex(0);
-    setCorrectCount(0);
+    setChapterCorrectCount(0);
     setShowResult(false);
   };
 
   const handleAnswer = (isCorrect: boolean) => {
-    console.log('[QuizPage] 答题结果:', isCorrect);
-    if (isCorrect) {
-      setCorrectCount(prev => prev + 1);
+    const currentQuiz = chapterQuizzes[currentQuizIndex];
+    console.log('[QuizPage] 答题结果:', isCorrect, '题目:', currentQuiz?.id);
+    
+    if (!completedQuizzes.includes(currentQuiz.id)) {
+      completeQuiz(currentQuiz.id, isCorrect);
+      if (isCorrect) {
+        setChapterCorrectCount(prev => prev + 1);
+      }
     }
   };
 
@@ -73,7 +85,8 @@ const QuizPage: React.FC = () => {
   // 答题页面
   if (selectedChapter && chapterQuizzes.length > 0) {
     if (showResult) {
-      const isPassed = correctCount >= Math.ceil(chapterQuizzes.length * 0.6);
+      const isPassed = chapterCorrectCount >= Math.ceil(chapterQuizzes.length * 0.6);
+      const chapterAccuracy = Math.min(100, Math.round((chapterCorrectCount / chapterQuizzes.length) * 100));
       
       return (
         <ScrollView className={styles.page} scrollY>
@@ -94,20 +107,20 @@ const QuizPage: React.FC = () => {
                 {isPassed ? '恭喜通过！' : '继续加油！'}
               </Text>
               <Text className={styles.scoreDesc}>
-                本次答对 {correctCount} / {chapterQuizzes.length} 题
+                本次答对 {chapterCorrectCount} / {chapterQuizzes.length} 题
               </Text>
               
               <View className={styles.scoreDetail}>
                 <View className={styles.scoreDetailItem}>
-                  <Text className={styles.scoreDetailValue}>{correctCount}</Text>
+                  <Text className={styles.scoreDetailValue}>{chapterCorrectCount}</Text>
                   <Text className={styles.scoreDetailLabel}>正确</Text>
                 </View>
                 <View className={styles.scoreDetailItem}>
-                  <Text className={styles.scoreDetailValue}>{chapterQuizzes.length - correctCount}</Text>
+                  <Text className={styles.scoreDetailValue}>{chapterQuizzes.length - chapterCorrectCount}</Text>
                   <Text className={styles.scoreDetailLabel}>错误</Text>
                 </View>
                 <View className={styles.scoreDetailItem}>
-                  <Text className={styles.scoreDetailValue}>{Math.round((correctCount / chapterQuizzes.length) * 100)}%</Text>
+                  <Text className={styles.scoreDetailValue}>{chapterAccuracy}%</Text>
                   <Text className={styles.scoreDetailLabel}>正确率</Text>
                 </View>
               </View>
@@ -201,28 +214,31 @@ const QuizPage: React.FC = () => {
       <View className={styles.content}>
         {activeTab === 'quiz' ? (
           chapters.length > 0 ? (
-            chapters.map(chapter => (
-              <View key={chapter.id} className={styles.chapterCard}>
-                <View className={styles.chapterHeader}>
-                  <Text className={styles.chapterTitle}>{chapter.title}</Text>
-                  <Text className={classnames(
-                    styles.chapterBadge,
-                    chapter.completed ? styles.badgeCompleted : styles.badgeUncompleted
-                  )}>
-                    {chapter.completed ? '✓ 已完成' : '未完成'}
+            chapters.map(chapter => {
+              const completed = isChapterCompleted(chapter);
+              return (
+                <View key={chapter.id} className={styles.chapterCard}>
+                  <View className={styles.chapterHeader}>
+                    <Text className={styles.chapterTitle}>{chapter.title}</Text>
+                    <Text className={classnames(
+                      styles.chapterBadge,
+                      completed ? styles.badgeCompleted : styles.badgeUncompleted
+                    )}>
+                      {completed ? '✓ 已完成' : '未完成'}
+                    </Text>
+                  </View>
+                  <Text className={styles.chapterMeta}>
+                    {chapter.quizCount} 道题目 · 答对 {Math.ceil(chapter.quizCount * 0.6)} 题即可获得印章
                   </Text>
+                  <Button
+                    className={styles.startBtn}
+                    onClick={() => handleStartChapter(chapter)}
+                  >
+                    {completed ? '🔄 再测一次' : '▶️ 开始答题'}
+                  </Button>
                 </View>
-                <Text className={styles.chapterMeta}>
-                  {chapter.quizCount} 道题目 · 答对 {Math.ceil(chapter.quizCount * 0.6)} 题即可获得印章
-                </Text>
-                <Button
-                  className={styles.startBtn}
-                  onClick={() => handleStartChapter(chapter)}
-                >
-                  {chapter.completed ? '🔄 再测一次' : '▶️ 开始答题'}
-                </Button>
-              </View>
-            ))
+              );
+            })
           ) : (
             <View className={styles.empty}>
               <Text className={styles.emptyIcon}>📋</Text>

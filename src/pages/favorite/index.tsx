@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Image, Button } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { useShareAppMessage, useShareTimeline } from '@tarojs/taro';
 import styles from './index.module.scss';
 import classnames from 'classnames';
 import { exhibits, getExhibitById } from '@/data/exhibits';
@@ -18,10 +18,48 @@ const FavoritePage: React.FC = () => {
     listenedAudios, 
     unfinishedRoutes,
     stamps,
-    completedQuizzes
+    completedQuizzes,
+    totalCorrectCount
   } = useAppStore();
   const [activeTab, setActiveTab] = useState<TabType>('favorites');
   const [showSouvenir, setShowSouvenir] = useState(false);
+  const [souvenirShareData, setSouvenirShareData] = useState<{
+    title: string;
+    desc: string;
+  } | null>(null);
+
+  const totalStamps = stamps.filter(s => s.earned).length;
+  const today = dayjs().format('YYYY年M月D日');
+
+  const souvenirMessage = generateSouvenirCard({
+    visitDate: today,
+    visitedCount: listenedAudios.length,
+    likedCount: favorites.length,
+    quizPassedCount: totalCorrectCount,
+    stampsCount: totalStamps
+  });
+
+  useShareAppMessage(() => {
+    if (souvenirShareData) {
+      return {
+        title: souvenirShareData.title,
+        desc: souvenirShareData.desc,
+        path: '/pages/home/index'
+      };
+    }
+    return {
+      title: '🏛️ 博物馆自助导览',
+      desc: '探索历史，感受文化魅力',
+      path: '/pages/home/index'
+    };
+  });
+
+  useShareTimeline(() => {
+    return {
+      title: '🏛️ 博物馆自助导览',
+      query: ''
+    };
+  });
 
   const favoriteExhibits = favorites
     .map(f => getExhibitById(f.exhibitId))
@@ -43,9 +81,6 @@ const FavoritePage: React.FC = () => {
     }))
     .filter(item => item.route);
 
-  const totalStamps = stamps.filter(s => s.earned).length;
-  const today = dayjs().format('YYYY年M月D日');
-
   const handleContinueRoute = (routeId: string) => {
     console.log('[FavoritePage] 继续路线:', routeId);
     Taro.switchTab({ url: '/pages/route/index' });
@@ -57,8 +92,34 @@ const FavoritePage: React.FC = () => {
   };
 
   const handleShare = () => {
-    Taro.showToast({ title: '分享功能开发中...', icon: 'none' });
     console.log('[FavoritePage] 分享纪念卡');
+    const shareTitle = `我的博物馆参观纪念卡`;
+    const shareDesc = `我在博物馆聆听了${listenedAudios.length}件展品讲解，收藏了${favorites.length}件展品，获得了${totalStamps}枚印章！${souvenirMessage}`;
+    
+    setSouvenirShareData({
+      title: shareTitle,
+      desc: shareDesc
+    });
+
+    Taro.showShareMenu({
+      withShareTicket: true,
+      menus: ['shareAppMessage', 'shareTimeline'],
+      success: () => {
+        console.log('[FavoritePage] 分享菜单已显示');
+        Taro.showToast({ 
+          title: '点击右上角分享', 
+          icon: 'none',
+          duration: 2000
+        });
+      },
+      fail: (err) => {
+        console.error('[FavoritePage] 分享菜单显示失败:', err);
+        Taro.showToast({ 
+          title: '分享失败，请重试', 
+          icon: 'error'
+        });
+      }
+    });
   };
 
   const handleCloseSouvenir = () => {
@@ -70,14 +131,6 @@ const FavoritePage: React.FC = () => {
       url: `/pages/exhibit-detail/index?id=${exhibitId}`
     });
   };
-
-  const souvenirMessage = generateSouvenirCard({
-    visitDate: today,
-    visitedCount: listenedAudios.length,
-    likedCount: favorites.length,
-    quizPassedCount: completedQuizzes.length,
-    stampsCount: totalStamps
-  });
 
   return (
     <ScrollView className={styles.page} scrollY>
@@ -192,31 +245,32 @@ const FavoritePage: React.FC = () => {
 
         {activeTab === 'routes' && (
           routeItems.length > 0 ? (
-            routeItems.map(({ route, currentIndex, startedAt) => (
+            routeItems.map(({ route, currentIndex, startedAt }) => (
               route && (
-              <View key={route.id} className={styles.routeItem}>
-                <View className={styles.routeIcon}>{route.icon}</View>
-                <View className={styles.routeContent}>
-                  <Text className={styles.routeName}>{route.name}</Text>
-                  <Text className={styles.routeMeta}>
-                    进度: {currentIndex}/{route.exhibitCount} 件展品 · 开始于 {dayjs(startedAt).format('M月D日')}
-                  </Text>
+                <View key={route.id} className={styles.routeItem}>
+                  <View className={styles.routeIcon}>{route.icon}</View>
+                  <View className={styles.routeContent}>
+                    <Text className={styles.routeName}>{route.name}</Text>
+                    <Text className={styles.routeMeta}>
+                      进度: {currentIndex}/{route.exhibitCount} 件展品 · 开始于 {dayjs(startedAt).format('M月D日')}
+                    </Text>
+                  </View>
+                  <Button
+                    className={styles.continueBtn}
+                    onClick={() => handleContinueRoute(route.id)}
+                  >
+                    继续
+                  </Button>
                 </View>
-                <Button
-                  className={styles.continueBtn}
-                  onClick={() => handleContinueRoute(route.id)}
-                >
-                  继续
-                </Button>
-              </View>
-            )
-          ))
-        ) : (
-          <View className={styles.empty}>
-            <Text className={styles.emptyIcon}>🗺️</Text>
-            <Text className={styles.emptyText}>暂无进行中的路线</Text>
-            <Text className={styles.emptyDesc}>去路线规划页选择参观模式</Text>
-          </View>
+              )
+            ))
+          ) : (
+            <View className={styles.empty}>
+              <Text className={styles.emptyIcon}>🗺️</Text>
+              <Text className={styles.emptyText}>暂无进行中的路线</Text>
+              <Text className={styles.emptyDesc}>去路线规划页选择参观模式</Text>
+            </View>
+          )
         )}
       </View>
 

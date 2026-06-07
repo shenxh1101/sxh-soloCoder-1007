@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import type { AppState, Stamp } from '@/types';
+import type { AppState, Stamp, FavoriteItem, ListenedAudio, UnfinishedRoute } from '@/types';
+
+const STORAGE_KEY = 'museum_app_state';
 
 const initialStamps: Stamp[] = [
   { id: 's1', name: '常设展览', icon: '🏛️', earned: false },
@@ -10,30 +12,69 @@ const initialStamps: Stamp[] = [
   { id: 's6', name: '全馆通览', icon: '🎖️', earned: false },
 ];
 
-export const useAppStore = create<AppState>((set, get) => ({
-  favorites: [],
-  listenedAudios: [],
-  unfinishedRoutes: [],
-  completedQuizzes: [],
-  stamps: initialStamps,
+interface PersistedState {
+  favorites: FavoriteItem[];
+  listenedAudios: ListenedAudio[];
+  unfinishedRoutes: UnfinishedRoute[];
+  completedQuizzes: string[];
+  stamps: Stamp[];
+  totalCorrectCount: number;
+}
+
+const loadPersistedState = (): Partial<PersistedState> => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    }
+  } catch (e) {
+    console.warn('[Store] 加载持久化数据失败:', e);
+  }
+  return {};
+};
+
+const savePersistedState = (state: Partial<PersistedState>) => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const current = loadPersistedState();
+      const toSave = { ...current, ...state };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+      console.log('[Store] 状态已持久化');
+    }
+  } catch (e) {
+    console.warn('[Store] 保存持久化数据失败:', e);
+  }
+};
+
+const persistedState = loadPersistedState();
+
+export const useAppStore = create<AppState & { totalCorrectCount: number }>((set, get) => ({
+  favorites: persistedState.favorites || [],
+  listenedAudios: persistedState.listenedAudios || [],
+  unfinishedRoutes: persistedState.unfinishedRoutes || [],
+  completedQuizzes: persistedState.completedQuizzes || [],
+  stamps: persistedState.stamps || initialStamps,
+  totalCorrectCount: persistedState.totalCorrectCount || 0,
   currentPlayingExhibitId: null,
   isPlaying: false,
 
   addFavorite: (exhibitId: string) => {
     const { favorites } = get();
     if (!favorites.find(f => f.exhibitId === exhibitId)) {
-      set({
-        favorites: [...favorites, { exhibitId, addedAt: new Date().toISOString() }]
-      });
+      const newFavorites = [...favorites, { exhibitId, addedAt: new Date().toISOString() }];
+      set({ favorites: newFavorites });
+      savePersistedState({ favorites: newFavorites });
       console.log('[Store] 添加收藏:', exhibitId);
     }
   },
 
   removeFavorite: (exhibitId: string) => {
     const { favorites } = get();
-    set({
-      favorites: favorites.filter(f => f.exhibitId !== exhibitId)
-    });
+    const newFavorites = favorites.filter(f => f.exhibitId !== exhibitId);
+    set({ favorites: newFavorites });
+    savePersistedState({ favorites: newFavorites });
     console.log('[Store] 移除收藏:', exhibitId);
   },
 
@@ -44,76 +85,88 @@ export const useAppStore = create<AppState>((set, get) => ({
   addListenedAudio: (exhibitId: string, progress: number) => {
     const { listenedAudios } = get();
     const existing = listenedAudios.find(l => l.exhibitId === exhibitId);
+    let newListenedAudios;
     if (existing) {
-      set({
-        listenedAudios: listenedAudios.map(l =>
-          l.exhibitId === exhibitId
-            ? { ...l, progress: Math.max(l.progress, progress), listenedAt: new Date().toISOString() }
-            : l
-        )
-      });
+      newListenedAudios = listenedAudios.map(l =>
+        l.exhibitId === exhibitId
+          ? { ...l, progress: Math.max(l.progress, progress), listenedAt: new Date().toISOString() }
+          : l
+      );
     } else {
-      set({
-        listenedAudios: [...listenedAudios, {
-          exhibitId,
-          listenedAt: new Date().toISOString(),
-          progress
-        }]
-      });
+      newListenedAudios = [...listenedAudios, {
+        exhibitId,
+        listenedAt: new Date().toISOString(),
+        progress
+      }];
     }
+    set({ listenedAudios: newListenedAudios });
+    savePersistedState({ listenedAudios: newListenedAudios });
     console.log('[Store] 更新收听记录:', exhibitId, progress);
   },
 
   saveUnfinishedRoute: (routeId: string, currentIndex: number) => {
     const { unfinishedRoutes } = get();
     const existing = unfinishedRoutes.find(r => r.routeId === routeId);
+    let newUnfinishedRoutes;
     if (existing) {
-      set({
-        unfinishedRoutes: unfinishedRoutes.map(r =>
-          r.routeId === routeId
-            ? { ...r, currentExhibitIndex: currentIndex }
-            : r
-        )
-      });
+      newUnfinishedRoutes = unfinishedRoutes.map(r =>
+        r.routeId === routeId
+          ? { ...r, currentExhibitIndex: currentIndex }
+          : r
+      );
     } else {
-      set({
-        unfinishedRoutes: [...unfinishedRoutes, {
-          routeId,
-          currentExhibitIndex: currentIndex,
-          startedAt: new Date().toISOString()
-        }]
-      });
+      newUnfinishedRoutes = [...unfinishedRoutes, {
+        routeId,
+        currentExhibitIndex: currentIndex,
+        startedAt: new Date().toISOString()
+      }];
     }
+    set({ unfinishedRoutes: newUnfinishedRoutes });
+    savePersistedState({ unfinishedRoutes: newUnfinishedRoutes });
     console.log('[Store] 保存未完成路线:', routeId, currentIndex);
   },
 
   removeUnfinishedRoute: (routeId: string) => {
     const { unfinishedRoutes } = get();
-    set({
-      unfinishedRoutes: unfinishedRoutes.filter(r => r.routeId !== routeId)
-    });
+    const newUnfinishedRoutes = unfinishedRoutes.filter(r => r.routeId !== routeId);
+    set({ unfinishedRoutes: newUnfinishedRoutes });
+    savePersistedState({ unfinishedRoutes: newUnfinishedRoutes });
     console.log('[Store] 移除未完成路线:', routeId);
   },
 
-  completeQuiz: (quizId: string) => {
-    const { completedQuizzes } = get();
+  completeQuiz: (quizId: string, isCorrect?: boolean) => {
+    const { completedQuizzes, totalCorrectCount } = get();
     if (!completedQuizzes.includes(quizId)) {
-      set({
-        completedQuizzes: [...completedQuizzes, quizId]
+      const newCompletedQuizzes = [...completedQuizzes, quizId];
+      const newTotalCorrectCount = isCorrect ? totalCorrectCount + 1 : totalCorrectCount;
+      set({ 
+        completedQuizzes: newCompletedQuizzes,
+        totalCorrectCount: newTotalCorrectCount
       });
-      console.log('[Store] 完成答题:', quizId);
+      savePersistedState({ 
+        completedQuizzes: newCompletedQuizzes,
+        totalCorrectCount: newTotalCorrectCount
+      });
+      console.log('[Store] 完成答题:', quizId, isCorrect ? '正确' : '错误');
     }
+  },
+
+  incrementCorrectCount: () => {
+    const { totalCorrectCount } = get();
+    const newCount = totalCorrectCount + 1;
+    set({ totalCorrectCount: newCount });
+    savePersistedState({ totalCorrectCount: newCount });
   },
 
   earnStamp: (stampId: string) => {
     const { stamps } = get();
-    set({
-      stamps: stamps.map(s =>
-        s.id === stampId
-          ? { ...s, earned: true, earnedDate: new Date().toISOString() }
-          : s
-      )
-    });
+    const newStamps = stamps.map(s =>
+      s.id === stampId
+        ? { ...s, earned: true, earnedDate: new Date().toISOString() }
+        : s
+    );
+    set({ stamps: newStamps });
+    savePersistedState({ stamps: newStamps });
     console.log('[Store] 获得印章:', stampId);
   },
 

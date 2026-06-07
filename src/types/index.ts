@@ -97,6 +97,7 @@ export interface AppState {
   unfinishedRoutes: UnfinishedRoute[];
   completedQuizzes: string[];
   stamps: Stamp[];
+  totalCorrectCount: number;
   currentPlayingExhibitId: string | null;
   isPlaying: boolean;
   addFavorite: (exhibitId: string) => void;
@@ -105,7 +106,8 @@ export interface AppState {
   addListenedAudio: (exhibitId: string, progress: number) => void;
   saveUnfinishedRoute: (routeId: string, currentIndex: number) => void;
   removeUnfinishedRoute: (routeId: string) => void;
-  completeQuiz: (quizId: string) => void;
+  completeQuiz: (quizId: string, isCorrect?: boolean) => void;
+  incrementCorrectCount: () => void;
   earnStamp: (stampId: string) => void;
   setCurrentPlaying: (exhibitId: string | null) => void;
   togglePlay: () => void;

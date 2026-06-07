@@ -4,7 +4,7 @@ import Taro from '@tarojs/taro';
 import styles from './index.module.scss';
 import classnames from 'classnames';
 import { exhibitions, getPermanentExhibitions, getTemporaryExhibitions } from '@/data/exhibitions';
-import { exhibits } from '@/data/exhibits';
+import { exhibits, getExhibitById } from '@/data/exhibits';
 import ExhibitCard from '@/components/ExhibitCard';
 import { formatCrowdLevel, getCrowdIcon } from '@/utils';
 import type { Exhibition } from '@/types';
@@ -19,16 +19,73 @@ const HomePage: React.FC = () => {
     ? getPermanentExhibitions() 
     : getTemporaryExhibitions();
 
+  const parseExhibitId = (scanResult: string): string | null => {
+    if (!scanResult) return null;
+    
+    const patterns = [
+      /^[a-zA-Z0-9]+$/,
+      /id=([a-zA-Z0-9]+)/,
+      /exhibit[/-]([a-zA-Z0-9]+)/,
+      /\/pages\/exhibit-detail\/.*[?&]id=([a-zA-Z0-9]+)/
+    ];
+    
+    for (const pattern of patterns) {
+      const match = scanResult.match(pattern);
+      if (match) {
+        return match[1] || match[0];
+      }
+    }
+    
+    return null;
+  };
+
   const handleScan = () => {
     console.log('[HomePage] 点击扫码');
-    Taro.showToast({ title: '扫码功能', icon: 'none' });
-    // 模拟扫码成功后跳转
-    setTimeout(() => {
-      const randomExhibit = exhibits[Math.floor(Math.random() * exhibits.length)];
-      Taro.navigateTo({
-        url: `/pages/exhibit-detail/index?id=${randomExhibit.id}`
-      });
-    }, 500);
+    Taro.scanCode({
+      onlyFromCamera: false,
+      scanType: ['qrCode', 'barCode'],
+      success: (res) => {
+        console.log('[HomePage] 扫码成功:', res.result);
+        const scannedText = res.result;
+        const exhibitId = parseExhibitId(scannedText);
+        
+        if (!exhibitId) {
+          Taro.showModal({
+            title: '无法识别',
+            content: `二维码内容无法识别：\n${scannedText}\n\n请扫描展品旁的官方二维码。`,
+            showCancel: false,
+            confirmText: '知道了'
+          });
+          return;
+        }
+        
+        const exhibit = getExhibitById(exhibitId);
+        if (exhibit) {
+          console.log('[HomePage] 找到展品:', exhibit.name);
+          Taro.navigateTo({
+            url: `/pages/exhibit-detail/index?id=${exhibitId}`
+          });
+        } else {
+          Taro.showModal({
+            title: '展品不存在',
+            content: `未找到编号为「${exhibitId}」的展品。\n\n可能该展品已下架或二维码有误。`,
+            showCancel: false,
+            confirmText: '知道了'
+          });
+        }
+      },
+      fail: (err) => {
+        console.error('[HomePage] 扫码失败:', err);
+        if (err.errMsg && err.errMsg.includes('cancel')) {
+          console.log('[HomePage] 用户取消扫码');
+        } else {
+          Taro.showToast({
+            title: '扫码失败，请重试',
+            icon: 'error'
+          });
+        }
+      }
+    });
   };
 
   const handleNavClick = (tab: string) => {
