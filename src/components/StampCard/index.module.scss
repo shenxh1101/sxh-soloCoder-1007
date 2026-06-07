@@ -1,0 +1,47 @@
+@use '@/styles/variables.scss' as *;
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: $spacing-md;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  transition: all $transition-base;
+}
+
+.stampIcon {
+  width: 100rpx;
+  height: 100rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56rpx;
+  background: rgba(139, 105, 20, 0.1);
+  border-radius: $radius-lg;
+  margin-bottom: $spacing-sm;
+}
+
+.stampIconEarned {
+  background: $color-primary-gradient;
+  color: $color-text-white;
+}
+
+.stampName {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+  text-align: center;
+}
+
+.stampDate {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  margin-top: 4rpx;
+}
+
+.stampLocked {
+  opacity: 0.4;
+  filter: grayscale(100%);
+}
